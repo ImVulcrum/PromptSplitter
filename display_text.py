@@ -1,45 +1,57 @@
 import win32api, win32con, win32gui, win32ui
 
 text_to_display = ""
+class_registered = False
+className = 'MyWindowClassName'
+hInstance = win32api.GetModuleHandle()
+hWindow = None
 
 def display(text):
-    global text_to_display
+    global text_to_display, class_registered, hWindow
     text_to_display = text
-    hInstance = win32api.GetModuleHandle()
-    className = 'MyWindowClassName'
 
-    wndClass = win32gui.WNDCLASS()
-    wndClass.style = win32con.CS_HREDRAW | win32con.CS_VREDRAW
-    wndClass.lpfnWndProc = wndProc
-    wndClass.hInstance = hInstance
-    wndClass.hCursor = win32gui.LoadCursor(None, win32con.IDC_ARROW)
-    wndClass.hbrBackground = win32gui.GetStockObject(win32con.WHITE_BRUSH)
-    wndClass.lpszClassName = className
-    wndClassAtom = win32gui.RegisterClass(wndClass)
+    if not class_registered:
+        wndClass = win32gui.WNDCLASS()
+        wndClass.style = win32con.CS_HREDRAW | win32con.CS_VREDRAW
+        wndClass.lpfnWndProc = wndProc
+        wndClass.hInstance = hInstance
+        wndClass.hCursor = win32gui.LoadCursor(None, win32con.IDC_ARROW)
+        wndClass.hbrBackground = win32gui.GetStockObject(win32con.WHITE_BRUSH)
+        wndClass.lpszClassName = className
+        win32gui.RegisterClass(wndClass)
+        class_registered = True
 
-    exStyle = win32con.WS_EX_COMPOSITED | win32con.WS_EX_LAYERED | win32con.WS_EX_NOACTIVATE | win32con.WS_EX_TOPMOST | win32con.WS_EX_TRANSPARENT
-    style = win32con.WS_DISABLED | win32con.WS_POPUP | win32con.WS_VISIBLE
+    if not hWindow:
+        exStyle = win32con.WS_EX_COMPOSITED | win32con.WS_EX_LAYERED | win32con.WS_EX_NOACTIVATE | win32con.WS_EX_TOPMOST | win32con.WS_EX_TRANSPARENT
+        style = win32con.WS_DISABLED | win32con.WS_POPUP | win32con.WS_VISIBLE
 
-    hWindow = win32gui.CreateWindowEx(
-        exStyle,
-        wndClassAtom,
-        None,
-        style,
-        0,
-        0,
-        win32api.GetSystemMetrics(win32con.SM_CXSCREEN),
-        win32api.GetSystemMetrics(win32con.SM_CYSCREEN),
-        None,
-        None,
-        hInstance,
-        None
-    )
+        hWindow = win32gui.CreateWindowEx(
+            exStyle,
+            className,
+            None,
+            style,
+            0,
+            0,
+            win32api.GetSystemMetrics(win32con.SM_CXSCREEN),
+            win32api.GetSystemMetrics(win32con.SM_CYSCREEN),
+            None,
+            None,
+            hInstance,
+            None
+        )
 
-    win32gui.SetLayeredWindowAttributes(hWindow, 0x00ffffff, 255, win32con.LWA_COLORKEY | win32con.LWA_ALPHA)
-    win32gui.SetWindowPos(hWindow, win32con.HWND_TOPMOST, 0, 0, 0, 0, win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
+        win32gui.SetLayeredWindowAttributes(hWindow, 0x00ffffff, 255, win32con.LWA_COLORKEY | win32con.LWA_ALPHA)
+        win32gui.SetWindowPos(hWindow, win32con.HWND_TOPMOST, 0, 0, 0, 0, win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_SHOWWINDOW)
     
     win32gui.InvalidateRect(hWindow, None, True)
     win32gui.UpdateWindow(hWindow)
+
+def clear_screen():
+    global text_to_display
+    text_to_display = ""
+    if hWindow:
+        win32gui.InvalidateRect(hWindow, None, True)
+        win32gui.UpdateWindow(hWindow)
 
 def wndProc(hWnd, message, wParam, lParam):
     if message == win32con.WM_PAINT:

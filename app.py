@@ -7,6 +7,8 @@ import keyboard
 import pyperclip
 
 prompt_queue = [] #global
+paste_flag = 0 #global
+v_pressed = False #global
 
 # Colors
 primary_color1 = "#1f6aa5" #standard color of the blue color theme
@@ -30,13 +32,22 @@ def split_button_callback():
     split_prompt(prompt_string, chunk_size)
 
 def paste_button_callback():
+    global paste_flag
+
     if paste_button.cget("text") == "Paste": #executed when pasting thread is started
         paste_button.configure(text="Cancel", fg_color=secondary_color1)
-        paste_process = (multiprocessing.Process(target = paste, args=(prompt_queue,)))
-        paste_process.start()
+        token_length_slider.configure(button_color=disabled_color, state ="disabled")
+        prompt.configure(state="disabled")
+
+        pyperclip.copy(prompt_queue[0])
+        paste_flag = 2
+
     else:   #executed when canceling
         paste_button.configure(text="Paste", fg_color=primary_color1)
-        paste_process.terminate()
+        token_length_slider.configure(button_color=primary_color1, state ="normal")
+        prompt.configure(state="normal")
+
+        paste_flag=0
 
 def token_slider_callback(current_token_length):
     current_prompt_length = len(prompt.get("0.0", "end"))
@@ -53,6 +64,10 @@ def token_slider_callback(current_token_length):
     #deactivate the split button when the token length is bigger than the prompt length
     if current_prompt_length <= current_token_length:
         split_button.configure(text="Split", state="disabled", fg_color=disabled_color)
+
+    # deactivate the paste button (when its enabled) after an update of the token lenght slider
+    if paste_button.cget("state") == "normal":
+        paste_button.configure(state="disabled", fg_color=disabled_color)
 
 
 def split_prompt(prompt_string, chunk_size):
@@ -95,39 +110,6 @@ def add_parts_to_queue(chunks, number_of_parts):
         else:
             prompt_queue.append((default_front.replace("$", str(number_of_parts)).replace("%", str(current_part))) + "\n\n" + str(part) + "\n\n" + (default_back.replace("$", str(number_of_parts)).replace("%", str(current_part))))
         current_part = current_part +1
-
-def paste(queue):
-    counter = 1
-    display_process = None
-
-    for part in queue:
-        if display_process is not None:
-            # Terminate the previous display process
-            display_process.terminate()
-            display_process.join()
-
-        # Start a new display process
-        display_process = multiprocessing.Process(target=display_text.display, args=(str(counter),))
-        display_process.start()
-
-        # Copy the part to clipboard
-        pyperclip.copy(part)
-        
-        # Wait for the user to press enter
-        keyboard.wait("enter")
-
-        counter += 1
-
-    # Ensure the last display process is also terminated
-    if display_process is not None:
-        display_process.terminate()
-        display_process.join()
-
-    print("finish")
-    print(paste_button.cget("text"))
-    paste_button.configure(text="Paste", fg_color=primary_color1)
-    
-    print("hfg")
     
 # General GUI design settings
 customtkinter.set_appearance_mode("System")
@@ -178,21 +160,57 @@ split_button.grid(row=0, column =0, padx=20)
 paste_button = customtkinter.CTkButton(button_frame, text="Paste", state="disabled", fg_color=disabled_color, command=paste_button_callback)
 paste_button.grid(row=0, column =1, padx=20)
 
+# Define a callback function for the key combination
+def on_v(e):
+    global v_pressed
+    if e.event_type == 'down':
+        v_pressed = True
+
+# Hook the key combination
+keyboard.hook_key('v', on_v)
+
 if __name__ == '__main__': # Run app
 
     entry = prompt.get("0.0", "end")
     
     while True:
+        #---window logic---
         current_entry = prompt.get("0.0", "end")
         current_token_length = token_length_slider.get()
-
-        #activate the split button (when its disabled) after an update in the prompt textbox
-        if current_entry != entry and split_button.cget("state") == "disabled" and len(current_entry) > int(current_token_length):
-            split_button.configure(text="Split", state="normal", fg_color=primary_color1)
+        
+        if current_entry != entry: #uopdate in the textbox
+            #activate the split button (when its disabled) after an update in the prompt textbox
+            if split_button.cget("state") == "disabled" and len(current_entry) > int(current_token_length):
+                split_button.configure(text="Split", state="normal", fg_color=primary_color1)
+            # deactivate the paste button (when its enabled) after an update in the prompt textbox
+            if paste_button.cget("state") == "normal":
+                paste_button.configure(state="disabled", fg_color=disabled_color)
         
         entry = current_entry
 
-        #update window
+        #---paste logic---
+        if v_pressed:
+            v_pressed = False # reset the flag
+
+            if paste_flag != 0:
+
+                if paste_flag <= len(prompt_queue): #as long as there a unpasted elements copy them
+                    pyperclip.copy(prompt_queue[paste_flag-1])
+                    paste_flag = paste_flag+1
+                else:
+                    paste_flag=0
+                    paste_button.configure(text="Paste", fg_color=primary_color1)
+                    token_length_slider.configure(button_color=primary_color1, state ="normal")
+                    prompt.configure(state="normal")
+
+        #---text overlay logic---
+        if paste_flag != 0:
+            display_text.clear_screen()
+            display_text.display(str(paste_flag-1))
+        else:
+            display_text.clear_screen()
+
+        #---update window---
         app.update()
         app.update_idletasks()
         sleep(0.05)
