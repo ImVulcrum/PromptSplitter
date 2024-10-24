@@ -1,6 +1,4 @@
-import tkinter as tk
 import customtkinter
-import multiprocessing
 import display_text
 from time import sleep
 import keyboard
@@ -9,6 +7,7 @@ import pyperclip
 prompt_queue = [] #global
 paste_flag = 0 #global
 v_pressed = False #global
+window_is_open = True #global
 
 # Colors
 primary_color1 = "#1f6aa5" #standard color of the blue color theme
@@ -53,8 +52,12 @@ def token_slider_callback(current_token_length):
     current_prompt_length = len(prompt.get("0.0", "end"))
 
     # update the caption below to slider to the right value
-    value_string = str(current_token_length)
-    displayed_text = "token length: " + value_string[:2] + "." + value_string[2:5]
+    value_string = str(int(current_token_length))
+    displayed_text = "Error"
+    if len(value_string) == 5:
+        displayed_text = "token length: " + value_string[:2] + "." + value_string[2:5]
+    elif len(value_string) == 4:
+        displayed_text = "token length: " + value_string[:1] + "." + value_string[1:4]
     slider_caption.configure(text=displayed_text)
 
     #activate the split button (when its disabled) after an update of the token length slider
@@ -65,7 +68,7 @@ def token_slider_callback(current_token_length):
     if current_prompt_length <= current_token_length:
         split_button.configure(text="Split", state="disabled", fg_color=disabled_color)
 
-    # deactivate the paste button (when its enabled) after an update of the token lenght slider
+    # deactivate the paste button (when its enabled) after an update of the token length slider
     if paste_button.cget("state") == "normal":
         paste_button.configure(state="disabled", fg_color=disabled_color)
 
@@ -91,25 +94,40 @@ def split_prompt(prompt_string, chunk_size):
     # calculate the number of parts
     number_of_parts= len(chunks) +1
 
-    add_parts_to_queue(chunks, number_of_parts)
+    add_parts_to_queue(chunks, number_of_parts, use_instructions.get())
 
-def add_parts_to_queue(chunks, number_of_parts):
+def add_parts_to_queue(chunks, number_of_parts, add_instructions):
     global prompt_queue
     prompt_queue = [] #clear the queue
+    current_part = 1
 
-    # add the instructions to the prompt queue
-    instructions_string = instructions.get("0.0", "end").replace("$", str(number_of_parts))
-    prompt_queue.append(instructions_string)
+    if add_instructions == 1:
+        # add the instructions to the prompt queue
+        instructions_string = instructions.get("0.0", "end").replace("$", str(number_of_parts))
+        prompt_queue.append(instructions_string)
+        current_part = 2
 
     # add the splitted prompts
-    current_part = 2
     for part in chunks:
         if current_part == number_of_parts: #last part is processed
-            prompt_queue.append((default_front.replace("$", str(number_of_parts))).replace("%", str(current_part)) + "\n\n" + str(part) + "\n\n" + (final_back.replace("$", str(number_of_parts)).replace("%", str(current_part))))
+            if add_instructions == 1:
+                prompt_queue.append((default_front.replace("$", str(number_of_parts))).replace("%", str(current_part)) + "\n\n" + str(part) + "\n\n" + (final_back.replace("$", str(number_of_parts)).replace("%", str(current_part))))
+            else:
+                prompt_queue.append(part)
             break
         else:
-            prompt_queue.append((default_front.replace("$", str(number_of_parts)).replace("%", str(current_part))) + "\n\n" + str(part) + "\n\n" + (default_back.replace("$", str(number_of_parts)).replace("%", str(current_part))))
+            if add_instructions == 1:
+                prompt_queue.append((default_front.replace("$", str(number_of_parts)).replace("%", str(current_part))) + "\n\n" + str(part) + "\n\n" + (default_back.replace("$", str(number_of_parts)).replace("%", str(current_part))))
+            else:
+                prompt_queue.append(part)
         current_part = current_part +1
+
+def on_closing():
+    global window_is_open
+    window_is_open = False
+    # Destroy the window
+    app.destroy()
+
     
 # General GUI design settings
 customtkinter.set_appearance_mode("System")
@@ -118,8 +136,12 @@ customtkinter.deactivate_automatic_dpi_awareness()
 
 # App frame
 app = customtkinter.CTk()
-app.geometry("780x520")
+app.geometry("780x530")
 app.title("Prompt Splitter")
+app.iconbitmap("PromptSplitter.ico")
+
+# Capture the window close event
+app.protocol("WM_DELETE_WINDOW", on_closing)
 
 # creating the tabview
 tabview = customtkinter.CTkTabview(app, corner_radius=12)
@@ -144,15 +166,18 @@ instructions.insert("0.0", text= default_instructions)
 instructions.pack(pady=0)
 
 # other elements
-token_length_slider = customtkinter.CTkSlider(app, from_=15000, to=64000, width=600, command=token_slider_callback)
+token_length_slider = customtkinter.CTkSlider(app, from_=1500, to=64000, width=600, command=token_slider_callback)
 token_length_slider.pack(pady=(20,0))
 token_length_slider.set(32000)
 
 slider_caption = customtkinter.CTkLabel(app, text="token length: 32.000", font=("<arial>", 15))
 slider_caption.pack()
 
+use_instructions = customtkinter.CTkCheckBox(app, 100, 20, 18, 18, text="use instructions", font=("<arial>", 15))
+use_instructions.pack(pady=(20,0))
+
 button_frame = customtkinter.CTkFrame(app, fg_color="transparent")
-button_frame.pack(pady=(20,0))
+button_frame.pack(pady=(8,0))
 
 split_button = customtkinter.CTkButton(button_frame, text="Split", state="disabled", fg_color=disabled_color, command=split_button_callback)
 split_button.grid(row=0, column =0, padx=20)
@@ -173,12 +198,12 @@ if __name__ == '__main__': # Run app
 
     entry = prompt.get("0.0", "end")
     
-    while True:
+    while window_is_open:
         #---window logic---
         current_entry = prompt.get("0.0", "end")
         current_token_length = token_length_slider.get()
         
-        if current_entry != entry: #uopdate in the textbox
+        if current_entry != entry: #update in the textbox
             #activate the split button (when its disabled) after an update in the prompt textbox
             if split_button.cget("state") == "disabled" and len(current_entry) > int(current_token_length):
                 split_button.configure(text="Split", state="normal", fg_color=primary_color1)
@@ -194,7 +219,7 @@ if __name__ == '__main__': # Run app
 
             if paste_flag != 0:
 
-                if paste_flag <= len(prompt_queue): #as long as there a unpasted elements copy them
+                if paste_flag <= len(prompt_queue): #as long as there a un-pasted elements copy them
                     pyperclip.copy(prompt_queue[paste_flag-1])
                     paste_flag = paste_flag+1
                 else:
