@@ -37,6 +37,7 @@ def paste_button_callback():
         paste_button.configure(text="Cancel", fg_color=secondary_color1)
         token_length_slider.configure(button_color=disabled_color, state ="disabled")
         prompt.configure(state="disabled")
+        use_instructions.configure(state="disabled")
 
         pyperclip.copy(prompt_queue[0])
         paste_flag = 2
@@ -45,6 +46,7 @@ def paste_button_callback():
         paste_button.configure(text="Paste", fg_color=primary_color1)
         token_length_slider.configure(button_color=primary_color1, state ="normal")
         prompt.configure(state="normal")
+        use_instructions.configure(state="normal")
 
         paste_flag=0
 
